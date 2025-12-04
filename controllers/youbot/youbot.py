@@ -34,10 +34,11 @@ DESIGN RATIONALE AND ARCHITECTURE:
    
 4. MANIPULATION STRATEGY:
    - Top-down grasp approach: Gripper approaches vertically for stable grasps
-   - Three-phase grasp execution:
+   - Four-phase grasp execution:
      a) Hover: Move to safe height above object (14cm clearance)
      b) Descend: Lower straight down to grasp height (2.5cm above table)
-     c) Close: Engage gripper fingers, then lift back to hover position
+     c) Close: Engage gripper fingers to secure object
+     d) Lift: Raise gripper back to hover position with object
    - IK seed biasing: Initializes IK solver with forward-facing arm configuration
      to maintain consistent elbow-down posture (avoids workspace singularities)
    - Joint clamping: Enforces conservative joint limits to prevent collisions

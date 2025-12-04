@@ -1,0 +1,19 @@
+# Python dependencies for KUKA youBot pick-and-place controller
+# Install with: pip install -r requirements.txt
+
+# Numerical computing and array operations
+numpy>=1.20.0
+
+# Scientific computing library for coordinate transformations
+scipy>=1.7.0
+
+# Forward/Inverse kinematics library for robot arm control
+kinpy>=0.0.4
+
+# Transformation utilities (used by youbot_base.py)
+# Note: This may be included with Webots or available as tf-transformations
+# pip install transformations
+
+# Webots controller API (provided by Webots installation)
+# Note: The 'controller' module is automatically available when running in Webots
+# controller (installed with Webots)

@@ -74,7 +74,6 @@ NOTES:
 """
 
 import math  # Mathematical functions for trigonometry and angle calculations
-import time  # Time utilities (currently unused but available for timing measurements)
 import numpy as np  # Numerical array operations for vectors, matrices, and linear algebra
 import kinpy as kp  # Kinematic library for forward/inverse kinematics and transforms
 from scipy.spatial.transform import Rotation  # Quaternion and rotation matrix conversions
@@ -91,6 +90,17 @@ CRUISE_SPEED = 0.25        # Maximum linear velocity [m/s] for base motion
 TURN_SPEED = 0.6           # Maximum angular velocity [rad/s] for base rotation
 DISTANCE_TOLERANCE = 0.02  # Position accuracy threshold [m] for navigation goals
 ANGLE_TOLERANCE = 0.05     # Heading accuracy threshold [rad] for navigation goals
+
+# Obstacle Avoidance Parameters
+LIDAR_SCAN_RANGE = 20      # Number of rays on each side of center to check [rays]
+OBSTACLE_THRESHOLD = 0.10  # Minimum safe distance to obstacles [m]
+
+# Inverse Kinematics Parameters
+IK_RETRY_OFFSET = 0.02     # Spatial offset for IK retry attempts [m]
+MAX_JOINT_JUMP = 3.0       # Maximum allowed joint angle change [rad] (~171°)
+
+# Timing Parameters (in simulation steps)
+DROP_SETTLE_ITERATIONS = 30  # Wait time after gripper opens for object to fall
 
 # ============================================================================
 # ARM JOINT CONFIGURATIONS (5-DOF arm: [J1, J2, J3, J4, J5])
@@ -328,9 +338,9 @@ class Mission3Controller(YouBot):
         # LiDAR-based obstacle avoidance
         scan = np.array(self.lidar.getRangeImage())
         mid = len(scan)//2
-        # Check forward arc (±20 rays from center) for obstacles
-        # 0.10m threshold allows close approach to table without false stops
-        if np.min(scan[mid-20:mid+20]) < 0.10 and vx > 0:
+        # Check forward arc for obstacles using configured scan range
+        # Threshold allows close approach to table without false stops
+        if np.min(scan[mid-LIDAR_SCAN_RANGE:mid+LIDAR_SCAN_RANGE]) < OBSTACLE_THRESHOLD and vx > 0:
             vx = 0  # Stop forward motion only
             
         self.set_mecanuum_control(vx, vy, w)
@@ -540,7 +550,8 @@ class Mission3Controller(YouBot):
         if q_hover is None:
             # Retry IK with small spatial offsets if direct solution fails
             # This handles cases where object is at workspace boundary
-            offsets = [(0.0,0.0), (0.02,0.0), (-0.02,0.0), (0.0,0.02), (0.0,-0.02)]
+            offsets = [(0.0,0.0), (IK_RETRY_OFFSET,0.0), (-IK_RETRY_OFFSET,0.0), 
+                       (0.0,IK_RETRY_OFFSET), (0.0,-IK_RETRY_OFFSET)]
             for ox, oy in offsets:
                 tf = kp.Transform(pos=np.array([local_x + ox, local_y + oy, grasp_height + hover_height]), rot=target_rot)
                 try:
@@ -587,11 +598,11 @@ class Mission3Controller(YouBot):
         q_grasp = clamp_joints(q_grasp)
 
         # Sanity check: detect unreasonable joint jumps that indicate IK flip
-        # Large jumps (>171°) often indicate solution in wrong configuration branch
+        # Large jumps often indicate solution in wrong configuration branch
         try:
             cur = np.array(self.joint_pos(self.GRIPPER_ARM))
             jump = np.abs(cur - q_hover)
-            if np.any(jump > 3.0):  # 3.0 radians ≈ 171 degrees
+            if np.any(jump > MAX_JOINT_JUMP):
                 # Re-solve IK with more conservative seed to avoid flip
                 if DEBUG: print("[GRASP] Large joint jump detected, re-solving IK with ARM_SEARCH seed...")
                 try:
@@ -980,7 +991,7 @@ class Mission3Controller(YouBot):
                 self.open_gripper(timeout=2.0)  # Extended timeout ensures complete opening
                 
                 # Extended settling time ensures object falls completely into bin
-                for _ in range(30):
+                for _ in range(DROP_SETTLE_ITERATIONS):
                     self.step(self.TIME_STEP)
                 
                 self.cubes_collected += 1
